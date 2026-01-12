@@ -138,11 +138,9 @@ class PreparingCameraState extends CameraState {
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
     // Start camera BEFORE changing state to ensure frames are flowing
-    // when the UI shows the record button
+    // when the UI shows the record button. The native start() method
+    // blocks until the first frame is received.
     await CamerawesomePlugin.start();
-    // Additional delay to ensure camera hardware is fully stabilized
-    // and delivering frames before allowing recording
-    await Future.delayed(const Duration(milliseconds: 300));
     cameraContext.changeState(VideoCameraState.from(cameraContext));
   }
 
@@ -152,10 +150,9 @@ class PreparingCameraState extends CameraState {
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
-    // Start camera BEFORE changing state to ensure frames are flowing
+    // Start camera BEFORE changing state to ensure frames are flowing.
+    // The native start() method blocks until the first frame is received.
     await CamerawesomePlugin.start();
-    // Additional delay to ensure camera hardware is fully stabilized
-    await Future.delayed(const Duration(milliseconds: 300));
     cameraContext.changeState(PhotoCameraState.from(cameraContext));
   }
 
@@ -165,10 +162,9 @@ class PreparingCameraState extends CameraState {
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
-    // Start camera BEFORE changing state to ensure frames are flowing
+    // Start camera BEFORE changing state to ensure frames are flowing.
+    // The native start() method blocks until the first frame is received.
     await CamerawesomePlugin.start();
-    // Additional delay to ensure camera hardware is fully stabilized
-    await Future.delayed(const Duration(milliseconds: 300));
     cameraContext.changeState(PreviewCameraState.from(cameraContext));
   }
 
