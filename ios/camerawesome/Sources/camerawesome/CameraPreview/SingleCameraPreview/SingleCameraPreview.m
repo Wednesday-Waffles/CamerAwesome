@@ -245,15 +245,24 @@
 
 /// Dispose camera inputs & outputs
 - (void)dispose {
+  // Clear callbacks first to prevent execution during cleanup
+  self.onFirstFrameReceived = nil;
+  self.onPreviewFrameAvailable = nil;
+
   [self stop];
   [self.physicalButtonController stopListening];
-  
+
+  // Wrap removal in configuration for atomic cleanup
+  [_captureSession beginConfiguration];
+
   for (AVCaptureInput *input in [_captureSession inputs]) {
     [_captureSession removeInput:input];
   }
   for (AVCaptureOutput *output in [_captureSession outputs]) {
     [_captureSession removeOutput:output];
   }
+
+  [_captureSession commitConfiguration];
 }
 
 /// Set preview size resolution
@@ -268,8 +277,11 @@
   }
   [self setCameraPreset:previewSize];
   if (sessionIsRunning) {
+    __weak typeof(self) weakSelf = self;
     dispatch_async(_dispatchQueue, ^{
-      [self->_captureSession startRunning];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf) return;
+      [strongSelf->_captureSession startRunning];
     });
   }
 }
@@ -284,14 +296,20 @@
     dispatch_semaphore_signal(firstFrameSemaphore);
   };
 
+  // Use weak reference to prevent retain cycle and accessing deallocated memory
+  __weak typeof(self) weakSelf = self;
+
   // Start the capture session
   dispatch_async(_dispatchQueue, ^{
-    [self->_captureSession startRunning];
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf) return;
+
+    [strongSelf->_captureSession startRunning];
 
     // Pre-warm audio input/output to avoid cold-start sync issues on first recording
     // Without this, first recording has audio delay because audio is set up on-demand
-    if (self->_videoController.isAudioEnabled && !self->_videoController.isAudioSetup) {
-      [self setUpCaptureSessionForAudioError:^(NSError *error) {
+    if (strongSelf->_videoController.isAudioEnabled && !strongSelf->_videoController.isAudioSetup) {
+      [strongSelf setUpCaptureSessionForAudioError:^(NSError *error) {
         // Audio setup failed, but we can continue - it will be retried when recording starts
         NSLog(@"[CamerAwesome] Audio pre-warm failed: %@", error.localizedDescription);
       }];
@@ -353,8 +371,11 @@
   
   [_captureSession commitConfiguration];
   if (sessionIsRunning) {
+    __weak typeof(self) weakSelf = self;
     dispatch_async(_dispatchQueue, ^{
-      [self->_captureSession startRunning];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf) return;
+      [strongSelf->_captureSession startRunning];
     });
   }
 }
@@ -633,14 +654,19 @@
                                                                            error:&audioError];
   if (audioError) {
     error(audioError);
+    return;
   }
-  
+
   // Setup the audio output.
   _audioOutput = [[AVCaptureAudioDataOutput alloc] init];
-  
+
+  // Wrap session modifications in configuration for atomic changes
+  // This prevents race conditions when called during session startup
+  [_captureSession beginConfiguration];
+
   if ([_captureSession canAddInput:audioInput]) {
     [_captureSession addInput:audioInput];
-    
+
     if ([_captureSession canAddOutput:_audioOutput]) {
       [_captureSession addOutput:_audioOutput];
       [_videoController setIsAudioSetup:YES];
@@ -648,6 +674,8 @@
       [_videoController setIsAudioSetup:NO];
     }
   }
+
+  [_captureSession commitConfiguration];
 }
 
 # pragma mark - Camera Delegates
