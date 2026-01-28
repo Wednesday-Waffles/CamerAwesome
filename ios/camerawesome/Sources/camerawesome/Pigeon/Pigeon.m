@@ -1525,4 +1525,37 @@ void SetUpCameraInterfaceWithSuffix(id<FlutterBinaryMessenger> binaryMessenger, 
       [channel setMessageHandler:nil];
     }
   }
+  /// Set native-level audio debug configuration for testing.
+  ///
+  /// This injects failures at the NATIVE layer so we can test that
+  /// ensureAudioReady() properly detects and handles audio setup failures.
+  ///
+  /// [mode] values:
+  /// - 0: none (normal behavior)
+  /// - 1: preWarmFailsRetrySucceeds (first attempt fails, retry succeeds)
+  /// - 2: preWarmFailsRetryFails (all attempts fail)
+  /// - 3: preWarmDelayed (slow setup, simulates race condition)
+  /// - 4: permissionDenied (simulate permission error)
+  ///
+  /// [delayMs]: Delay in milliseconds for mode 3 (preWarmDelayed).
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
+        initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.camerawesome.CameraInterface.setNativeAudioDebugMode", messageChannelSuffix]
+        binaryMessenger:binaryMessenger
+        codec:nullGetPigeonCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(setNativeAudioDebugModeMode:delayMs:error:)], @"CameraInterface api (%@) doesn't respond to @selector(setNativeAudioDebugModeMode:delayMs:error:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        NSArray<id> *args = message;
+        NSInteger arg_mode = [GetNullableObjectAtIndex(args, 0) integerValue];
+        NSInteger arg_delayMs = [GetNullableObjectAtIndex(args, 1) integerValue];
+        FlutterError *error;
+        [api setNativeAudioDebugModeMode:arg_mode delayMs:arg_delayMs error:&error];
+        callback(wrapResult(nil, error));
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
 }

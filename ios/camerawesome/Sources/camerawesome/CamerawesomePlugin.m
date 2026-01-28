@@ -777,6 +777,18 @@ FlutterEventSink audioLevelEventSink;
   return [NSNumber numberWithBool: [MultiCameraController isMultiCamSupported]];
 }
 
+#pragma mark - Debug methods
+
+- (void)setNativeAudioDebugModeMode:(NSInteger)mode delayMs:(NSInteger)delayMs error:(FlutterError *_Nullable *_Nonnull)error {
+  if (self.camera == nil) {
+    // Debug injection is only supported for single camera mode
+    // For multi-camera, just ignore (no-op)
+    return;
+  }
+
+  [self.camera setNativeAudioDebugMode:mode delayMs:delayMs];
+}
+
 - (void)bgra8888toJpegBgra8888image:(nonnull AnalysisImageWrapper *)bgra8888image jpegQuality:(nonnull NSNumber *)jpegQuality completion:(nonnull void (^)(AnalysisImageWrapper * _Nullable, FlutterError * _Nullable))completion {
   dispatch_async(_dispatchQueueAnalysis, ^{
     [AnalysisController bgra8888toJpegBgra8888image:bgra8888image jpegQuality:jpegQuality completion:completion];

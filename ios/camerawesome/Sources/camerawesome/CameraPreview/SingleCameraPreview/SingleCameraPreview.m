@@ -33,7 +33,12 @@
   _mirrorFrontCamera = mirrorFrontCamera;
   _videoOptions = videoOptions;
   _recordingQuality = recordingQuality;
-  
+
+  // Initialize debug properties to normal mode (no injection)
+  _nativeAudioDebugMode = 0;
+  _nativeAudioDebugDelayMs = 0;
+  _nativeAudioSetupAttemptCount = 0;
+
   // Creating capture session
   _captureSession = [[AVCaptureSession alloc] init];
   _captureVideoOutput = [AVCaptureVideoDataOutput new];
@@ -669,9 +674,76 @@
   completion(@(YES), nil);
 }
 
+# pragma mark - Audio Debug Injection
+
+/// Sets native-level audio debug mode for testing.
+/// This allows testing that ensureAudioReady() correctly detects and handles audio failures.
+- (void)setNativeAudioDebugMode:(NSInteger)mode delayMs:(NSInteger)delayMs {
+  NSLog(@"[CamerAwesome] setNativeAudioDebugMode: mode=%ld, delayMs=%ld", (long)mode, (long)delayMs);
+  _nativeAudioDebugMode = mode;
+  _nativeAudioDebugDelayMs = delayMs;
+  // Reset attempt count when changing modes
+  _nativeAudioSetupAttemptCount = 0;
+}
+
 # pragma mark - Audio
 /// Setup audio channel to record audio
 - (void)setUpCaptureSessionForAudioError:(nonnull void (^)(NSError *))error {
+  // Increment attempt count for debug tracking
+  _nativeAudioSetupAttemptCount++;
+  NSLog(@"[CamerAwesome] setUpCaptureSessionForAudioError: attempt %ld, debugMode=%ld",
+        (long)_nativeAudioSetupAttemptCount, (long)_nativeAudioDebugMode);
+
+  // Handle debug injection modes
+  if (_nativeAudioDebugMode > 0) {
+    NSError *debugError = nil;
+
+    switch (_nativeAudioDebugMode) {
+      case 1: // preWarmFailsRetrySucceeds - first attempt fails, subsequent attempts succeed
+        if (_nativeAudioSetupAttemptCount == 1) {
+          NSLog(@"[CamerAwesome] DEBUG: Simulating pre-warm failure (attempt 1)");
+          // Simulate failure by NOT setting isAudioSetup
+          [_videoController setIsAudioSetup:NO];
+          debugError = [NSError errorWithDomain:@"CamerAwesome.Debug"
+                                           code:9001
+                                       userInfo:@{NSLocalizedDescriptionKey: @"[DEBUG] Pre-warm audio setup simulated failure"}];
+          error(debugError);
+          return;
+        }
+        NSLog(@"[CamerAwesome] DEBUG: Allowing retry to succeed (attempt %ld)", (long)_nativeAudioSetupAttemptCount);
+        break;
+
+      case 2: // preWarmFailsRetryFails - all attempts fail
+        NSLog(@"[CamerAwesome] DEBUG: Simulating all audio setup failures (attempt %ld)", (long)_nativeAudioSetupAttemptCount);
+        [_videoController setIsAudioSetup:NO];
+        debugError = [NSError errorWithDomain:@"CamerAwesome.Debug"
+                                         code:9002
+                                     userInfo:@{NSLocalizedDescriptionKey: @"[DEBUG] All audio setup attempts simulated failure"}];
+        error(debugError);
+        return;
+
+      case 3: // preWarmDelayed - slow setup simulating race condition
+        NSLog(@"[CamerAwesome] DEBUG: Delaying audio setup by %ldms", (long)_nativeAudioDebugDelayMs);
+        if (_nativeAudioDebugDelayMs > 0) {
+          [NSThread sleepForTimeInterval:_nativeAudioDebugDelayMs / 1000.0];
+        }
+        // Fall through to normal setup after delay
+        break;
+
+      case 4: // permissionDenied - simulate permission error
+        NSLog(@"[CamerAwesome] DEBUG: Simulating permission denied error");
+        [_videoController setIsAudioSetup:NO];
+        debugError = [NSError errorWithDomain:AVFoundationErrorDomain
+                                         code:AVErrorApplicationIsNotAuthorizedToUseDevice
+                                     userInfo:@{NSLocalizedDescriptionKey: @"[DEBUG] Simulated microphone permission denied"}];
+        error(debugError);
+        return;
+
+      default:
+        // Unknown mode, fall through to normal setup
+        break;
+    }
+  }
   NSError *audioError = nil;
   // Create a device input with the device and add it to the session.
   // Setup the audio input.

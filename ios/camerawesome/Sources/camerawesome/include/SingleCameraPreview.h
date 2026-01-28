@@ -67,6 +67,17 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 @property(nonatomic, copy) void (^onPreviewFrameAvailable)(void);
 @property(nonatomic, copy) void (^onFirstFrameReceived)(void);
 
+// Native audio debug injection properties (for testing only)
+// Debug modes:
+// 0 = none (normal behavior)
+// 1 = preWarmFailsRetrySucceeds (first attempt fails, retry succeeds)
+// 2 = preWarmFailsRetryFails (all attempts fail)
+// 3 = preWarmDelayed (slow setup, simulates race condition)
+// 4 = permissionDenied (simulate permission error)
+@property(nonatomic) NSInteger nativeAudioDebugMode;
+@property(nonatomic) NSInteger nativeAudioDebugDelayMs;
+@property(nonatomic) NSInteger nativeAudioSetupAttemptCount;
+
 - (instancetype)initWithCameraSensor:(PigeonSensorPosition)sensor
                         videoOptions:(nullable CupertinoVideoOptions *)videoOptions
                     recordingQuality:(VideoRecordingQuality)recordingQuality
@@ -113,6 +124,12 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 
 /// Synchronous wrapper for ensureAudioReady. Returns YES if audio is ready.
 - (BOOL)ensureAudioReadyWithError:(NSError * _Nullable * _Nullable)outError;
+
+/// Sets native-level audio debug mode for testing.
+/// This injects failures at the NATIVE layer to test ensureAudioReady() detection.
+/// @param mode Debug mode (0=none, 1=preWarmFailsRetrySucceeds, 2=preWarmFailsRetryFails, 3=preWarmDelayed, 4=permissionDenied)
+/// @param delayMs Delay in milliseconds for mode 3 (preWarmDelayed)
+- (void)setNativeAudioDebugMode:(NSInteger)mode delayMs:(NSInteger)delayMs;
 @end
 
 NS_ASSUME_NONNULL_END

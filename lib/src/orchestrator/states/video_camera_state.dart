@@ -42,24 +42,21 @@ class VideoCameraState extends CameraState {
         captureRequest: captureRequest, videoState: VideoState.started);
     try {
       // ════════════════════════════════════════════════════════════════════════
-      // AUDIO SETUP DEBUG INJECTION
+      // NATIVE-LEVEL AUDIO DEBUG INJECTION
       // ════════════════════════════════════════════════════════════════════════
-      // Simulates various audio setup failure scenarios for testing JIT retry.
-      // This runs BEFORE ensureAudioReady() to test the failure detection path.
+      // Sets native debug mode to inject failures at the NATIVE layer.
+      // This allows testing that ensureAudioReady() properly detects when
+      // isAudioSetup == false and handles the retry/failure correctly.
+      //
+      // Unlike Dart-level injection (which throws before ensureAudioReady runs),
+      // native-level injection lets ensureAudioReady() actually run and detect
+      // the failure state - testing the full code path.
 
-      // Simulate pre-warm delay (race condition testing)
-      final preWarmDelay = debugConfig.getPreWarmDelayMs();
-      if (preWarmDelay > 0) {
-        debugPrint('[CamerAwesome DEBUG] Simulating audio pre-warm delay: ${preWarmDelay}ms');
-        await Future.delayed(Duration(milliseconds: preWarmDelay));
-      }
-
-      // Check if audio setup should fail (debug injection)
-      debugConfig.incrementAudioSetupAttempt();
-      final audioFailure = debugConfig.shouldAudioSetupFail();
-      if (audioFailure != null) {
-        debugPrint('[CamerAwesome DEBUG] Audio setup failure injected: $audioFailure');
-        throw AudioSetupException(audioFailure);
+      if (debugConfig.audioSetupFailureMode != AudioSetupFailureMode.none) {
+        final nativeMode = debugConfig.nativeAudioDebugMode;
+        final delayMs = debugConfig.audioPreWarmDelayMs;
+        debugPrint('[CamerAwesome DEBUG] Setting native audio debug mode: $nativeMode (delay: ${delayMs}ms)');
+        await CamerawesomePlugin.setNativeAudioDebugMode(nativeMode, delayMs: delayMs);
       }
 
       // ════════════════════════════════════════════════════════════════════════
@@ -67,6 +64,11 @@ class VideoCameraState extends CameraState {
       // ════════════════════════════════════════════════════════════════════════
       // This handles the race condition where the user taps record before audio
       // pre-warm completes. If audio isn't ready, this will retry setup.
+      //
+      // The native layer will:
+      // 1. Check if audio is already set up (isAudioSetup flag)
+      // 2. If not, retry the audio setup
+      // 3. Return success/failure based on actual native state
       final audioReady = await CamerawesomePlugin.ensureAudioReady();
       if (!audioReady) {
         throw AudioSetupException('Microphone is not available');

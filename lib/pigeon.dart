@@ -1700,4 +1700,39 @@ class CameraInterface {
       return (pigeonVar_replyList[0] as bool?)!;
     }
   }
+
+  /// Set native-level audio debug configuration for testing.
+  ///
+  /// This injects failures at the NATIVE layer so we can test that
+  /// ensureAudioReady() properly detects and handles audio setup failures.
+  ///
+  /// [mode] values:
+  /// - 0: none (normal behavior)
+  /// - 1: preWarmFailsRetrySucceeds (first attempt fails, retry succeeds)
+  /// - 2: preWarmFailsRetryFails (all attempts fail)
+  /// - 3: preWarmDelayed (slow setup, simulates race condition)
+  /// - 4: permissionDenied (simulate permission error)
+  ///
+  /// [delayMs]: Delay in milliseconds for mode 3 (preWarmDelayed).
+  Future<void> setNativeAudioDebugMode(int mode, int delayMs) async {
+    final String pigeonVar_channelName = 'dev.flutter.pigeon.camerawesome.CameraInterface.setNativeAudioDebugMode$pigeonVar_messageChannelSuffix';
+    final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final List<Object?>? pigeonVar_replyList =
+        await pigeonVar_channel.send(<Object?>[mode, delayMs]) as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else {
+      return;
+    }
+  }
 }

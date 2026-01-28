@@ -212,4 +212,35 @@ class CamerawesomeDebugConfig {
     }
     return 0;
   }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // NATIVE-LEVEL AUDIO DEBUG (Tests ensureAudioReady() detection mechanism)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  /// Convert [AudioSetupFailureMode] to native debug mode integer.
+  ///
+  /// Native debug modes:
+  /// - 0: none (normal behavior)
+  /// - 1: preWarmFailsRetrySucceeds
+  /// - 2: preWarmFailsRetryFails
+  /// - 3: preWarmDelayed
+  /// - 4: permissionDenied
+  int audioSetupFailureModeToNativeMode(AudioSetupFailureMode mode) {
+    switch (mode) {
+      case AudioSetupFailureMode.none:
+        return 0;
+      case AudioSetupFailureMode.preWarmFailsRetrySucceeds:
+        return 1;
+      case AudioSetupFailureMode.preWarmFailsRetryFails:
+        return 2;
+      case AudioSetupFailureMode.preWarmDelayed:
+        return 3;
+      case AudioSetupFailureMode.permissionDenied:
+        return 4;
+    }
+  }
+
+  /// Get the native debug mode integer for the current [audioSetupFailureMode].
+  int get nativeAudioDebugMode =>
+      audioSetupFailureModeToNativeMode(audioSetupFailureMode);
 }

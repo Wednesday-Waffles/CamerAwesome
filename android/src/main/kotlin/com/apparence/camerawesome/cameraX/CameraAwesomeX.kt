@@ -750,6 +750,31 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
         }
     }
 
+    /**
+     * Sets native-level audio debug mode for testing.
+     *
+     * On Android, the audio setup is handled by CameraX internally, so this method
+     * is a no-op. The ensureAudioReady() method on Android only checks/requests
+     * the RECORD_AUDIO permission, which is sufficient for testing.
+     *
+     * Debug modes (same as iOS, but no-op on Android):
+     * - 0: none (normal behavior)
+     * - 1: preWarmFailsRetrySucceeds
+     * - 2: preWarmFailsRetryFails
+     * - 3: preWarmDelayed
+     * - 4: permissionDenied
+     *
+     * @param mode The debug mode to set
+     * @param delayMs Delay in milliseconds for mode 3
+     */
+    override fun setNativeAudioDebugMode(mode: Long, delayMs: Long) {
+        Log.d(TAG, "setNativeAudioDebugMode: mode=$mode, delayMs=$delayMs (no-op on Android)")
+        // On Android, audio setup is handled by CameraX internally.
+        // The ensureAudioReady() method only checks permissions.
+        // Native-level audio debug injection is not needed on Android
+        // since CameraX handles audio setup atomically with video recording.
+    }
+
     @SuppressLint("RestrictedApi", "UnsafeOptInUsageError")
     override fun availableSizes(): List<PreviewSize> {
         return cameraState.previewSizes().map {

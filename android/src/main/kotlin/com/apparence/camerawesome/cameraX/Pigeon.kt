@@ -845,6 +845,22 @@ interface CameraInterface {
   fun setFilter(matrix: List<Double>)
   fun isVideoRecordingAndImageAnalysisSupported(sensor: PigeonSensorPosition, callback: (Result<Boolean>) -> Unit)
   fun isMultiCamSupported(): Boolean
+  /**
+   * Set native-level audio debug configuration for testing.
+   *
+   * This injects failures at the NATIVE layer so we can test that
+   * ensureAudioReady() properly detects and handles audio setup failures.
+   *
+   * [mode] values:
+   * - 0: none (normal behavior)
+   * - 1: preWarmFailsRetrySucceeds (first attempt fails, retry succeeds)
+   * - 2: preWarmFailsRetryFails (all attempts fail)
+   * - 3: preWarmDelayed (slow setup, simulates race condition)
+   * - 4: permissionDenied (simulate permission error)
+   *
+   * [delayMs]: Delay in milliseconds for mode 3 (preWarmDelayed).
+   */
+  fun setNativeAudioDebugMode(mode: Long, delayMs: Long)
 
   companion object {
     /** The codec used by CameraInterface. */
@@ -1537,6 +1553,25 @@ interface CameraInterface {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               listOf(api.isMultiCamSupported())
+            } catch (exception: Throwable) {
+              wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.camerawesome.CameraInterface.setNativeAudioDebugMode$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val modeArg = args[0].let { num -> if (num is Int) num.toLong() else num as Long }
+            val delayMsArg = args[1].let { num -> if (num is Int) num.toLong() else num as Long }
+            val wrapped: List<Any?> = try {
+              api.setNativeAudioDebugMode(modeArg, delayMsArg)
+              listOf(null)
             } catch (exception: Throwable) {
               wrapError(exception)
             }
