@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:camerawesome/pigeon.dart';
 import 'package:camerawesome/src/orchestrator/camera_context.dart';
+import 'package:flutter/foundation.dart';
 
 /// When Camera is in Video mode
 class VideoCameraState extends CameraState {
@@ -48,18 +49,22 @@ class VideoCameraState extends CameraState {
       }
       await CamerawesomePlugin.recordVideo(captureRequest);
     } on Exception catch (e) {
-      _mediaCapture =
-          MediaCapture.failure(captureRequest: captureRequest, exception: e);
-
       // Toggle between buggy and fixed behavior for testing
       if (debugConfig.useBuggyStateMachineBehavior) {
-        // BUGGY: State transitions even on failure (original behavior)
-        // This causes "video is not recording" crash when user taps stop
+        // BUGGY: Original behavior - broadcast failure but STILL transition to recording state
+        // This creates UI/native state mismatch: UI shows recording, native isn't recording
+        // When user taps stop → crash: "video is not recording"
+        //
+        // Note: We intentionally DON'T broadcast failure here to simulate the original bug
+        // where users got stuck in recording state (error wasn't shown to them)
+        debugPrint('[CamerAwesome DEBUG] BUGGY MODE: Recording failed but transitioning to recording state anyway');
+        debugPrint('[CamerAwesome DEBUG] Exception was: $e');
         cameraContext.changeState(VideoRecordingCameraState.from(cameraContext));
         return captureRequest;
       } else {
-        // FIXED: Don't transition to recording state if recording failed
-        // Rethrow so caller knows recording failed and can handle appropriately
+        // FIXED: Broadcast failure and rethrow - don't transition to recording state
+        _mediaCapture =
+            MediaCapture.failure(captureRequest: captureRequest, exception: e);
         rethrow;
       }
     }
