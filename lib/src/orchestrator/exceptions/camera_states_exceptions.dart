@@ -17,3 +17,19 @@ class CameraNotReadyException implements Exception {
 
 /// from [PreparingCameraState] you must provide a valid next capture mode
 class NoValidCaptureModeException implements Exception {}
+
+/// Audio setup failed - microphone not available or permission denied.
+///
+/// This exception is thrown when:
+/// - Microphone permission is denied
+/// - Audio hardware is not available
+/// - Audio setup times out
+/// - Another app is using the microphone exclusively
+class AudioSetupException implements Exception {
+  final String message;
+
+  AudioSetupException(this.message);
+
+  @override
+  String toString() => 'AudioSetupException: $message';
+}

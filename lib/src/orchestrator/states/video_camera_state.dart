@@ -41,7 +41,38 @@ class VideoCameraState extends CameraState {
     _mediaCapture = MediaCapture.capturing(
         captureRequest: captureRequest, videoState: VideoState.started);
     try {
-      // Debug injection point for reproducing recording failure
+      // ════════════════════════════════════════════════════════════════════════
+      // AUDIO SETUP DEBUG INJECTION
+      // ════════════════════════════════════════════════════════════════════════
+      // Simulates various audio setup failure scenarios for testing JIT retry.
+      // This runs BEFORE ensureAudioReady() to test the failure detection path.
+
+      // Simulate pre-warm delay (race condition testing)
+      final preWarmDelay = debugConfig.getPreWarmDelayMs();
+      if (preWarmDelay > 0) {
+        debugPrint('[CamerAwesome DEBUG] Simulating audio pre-warm delay: ${preWarmDelay}ms');
+        await Future.delayed(Duration(milliseconds: preWarmDelay));
+      }
+
+      // Check if audio setup should fail
+      debugConfig.incrementAudioSetupAttempt();
+      final audioFailure = debugConfig.shouldAudioSetupFail();
+      if (audioFailure != null) {
+        debugPrint('[CamerAwesome DEBUG] Audio setup failure injected: $audioFailure');
+        throw AudioSetupException(audioFailure);
+      }
+
+      // TODO: Call native ensureAudioReady() here when implemented
+      // final audioReady = await CamerawesomePlugin.ensureAudioReady();
+      // if (!audioReady) {
+      //   throw AudioSetupException('Microphone is not available');
+      // }
+
+      // ════════════════════════════════════════════════════════════════════════
+      // RECORDING FAILURE DEBUG INJECTION
+      // ════════════════════════════════════════════════════════════════════════
+      // Simulates native recording failure for testing state machine fix.
+
       if (debugConfig.forceRecordingFailure) {
         await Future.delayed(
             Duration(milliseconds: debugConfig.recordingFailureDelayMs));
