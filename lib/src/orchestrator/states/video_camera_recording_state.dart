@@ -4,6 +4,7 @@ import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:camerawesome/pigeon.dart';
 import 'package:camerawesome/src/logger.dart';
 import 'package:camerawesome/src/orchestrator/camera_context.dart';
+import 'package:flutter/foundation.dart';
 
 /// Callback to get the CaptureRequest after the video has been taken
 typedef OnVideoCallback = Function(CaptureRequest request);
@@ -82,20 +83,37 @@ class VideoRecordingCameraState extends CameraState {
   }) async {
     var currentCapture = cameraContext.mediaCaptureController.value;
     if (currentCapture == null) {
+      // No capture in progress - still transition back to video mode
+      cameraContext.changeState(VideoCameraState.from(cameraContext));
       return;
     }
-    final result = await CamerawesomePlugin.stopRecordingVideo();
-    if (result) {
-      _mediaCapture = MediaCapture.success(
-        captureRequest: currentCapture.captureRequest,
-      );
-      onVideo?.call(currentCapture.captureRequest);
-    } else {
+
+    try {
+      final result = await CamerawesomePlugin.stopRecordingVideo();
+      if (result) {
+        _mediaCapture = MediaCapture.success(
+          captureRequest: currentCapture.captureRequest,
+        );
+        onVideo?.call(currentCapture.captureRequest);
+      } else {
+        _mediaCapture = MediaCapture.failure(
+          captureRequest: currentCapture.captureRequest,
+        );
+        onVideoFailed?.call(Exception("Error while stop recording"));
+      }
+    } catch (e) {
+      // Recording may have failed to start or been interrupted
+      // Native throws "video is not recording" if no recording is active
+      debugPrint('[CamerAwesome] stopRecording failed: $e');
       _mediaCapture = MediaCapture.failure(
         captureRequest: currentCapture.captureRequest,
+        exception: e is Exception ? e : Exception(e.toString()),
       );
-      onVideoFailed?.call(Exception("Error while stop recording"));
+      onVideoFailed?.call(e is Exception ? e : Exception(e.toString()));
     }
+
+    // ALWAYS transition back to video mode, even on error
+    // This ensures UI state matches native state
     cameraContext.changeState(VideoCameraState.from(cameraContext));
   }
 
