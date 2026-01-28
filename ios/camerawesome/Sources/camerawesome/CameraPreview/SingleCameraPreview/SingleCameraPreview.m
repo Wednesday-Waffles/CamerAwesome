@@ -113,8 +113,11 @@
 
         // Only send if we have a valid sink and are recording
         if (audioLevelEventSink != nil && strongSelf->_videoController.isRecording) {
-          // Send audio level as a double to Flutter
-          audioLevelEventSink(@(level));
+          // IMPORTANT: Flutter event channels must be called from the main thread
+          // The audio callback is invoked from the audio processing queue
+          dispatch_async(dispatch_get_main_queue(), ^{
+            audioLevelEventSink(@(level));
+          });
         }
       };
     } else {
