@@ -25,11 +25,11 @@ for (NSUInteger i = 0; i < mutableData.length; i += 4) {
   CGDataProviderRef dataProvider = CGDataProviderCreateWithCFData(cfData);
   
   CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-  CGImageRef cgImage = CGImageCreate(bgra8888image.width.intValue,
-                                     bgra8888image.height.intValue,
+  CGImageRef cgImage = CGImageCreate((size_t)bgra8888image.width,
+                                     (size_t)bgra8888image.height,
                                      8,
                                      32,
-                                     [bgra8888image.planes.firstObject.bytesPerRow intValue],
+                                     (size_t)bgra8888image.planes.firstObject.bytesPerRow,
                                      colorSpace,
                                      kCGBitmapByteOrder32Big |
                                      kCGImageAlphaPremultipliedLast,
