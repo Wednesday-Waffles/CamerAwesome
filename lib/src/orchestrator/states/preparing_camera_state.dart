@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:camerawesome/pigeon.dart';
-import 'package:camerawesome/src/orchestrator/exceptions/camera_states_exceptions.dart';
 import 'package:camerawesome/src/orchestrator/models/camera_physical_button.dart';
 
 /// When is not ready

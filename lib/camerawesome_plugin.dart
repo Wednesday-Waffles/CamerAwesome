@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 export 'src/camera_characteristics/camera_characteristics.dart';
 export 'src/debug/camerawesome_debug_config.dart';
 export 'src/orchestrator/analysis/analysis_controller.dart';
+export 'src/preview_size_extensions.dart';
 export 'src/orchestrator/models/models.dart';
 export 'src/orchestrator/models/sensor_type.dart';
 export 'src/orchestrator/models/sensors.dart';
@@ -389,6 +390,16 @@ class CamerawesomePlugin {
   /// enable audio mode recording or not
   static Future<void> setAudioMode(bool enableAudio) {
     return CameraInterface().setRecordingAudioMode(enableAudio);
+  }
+
+  /// Ensures audio is ready for recording, retrying setup if pre-warm failed.
+  ///
+  /// This is called JIT (just-in-time) before startRecording to handle race
+  /// conditions where the user taps record before audio pre-warm completes.
+  ///
+  /// Returns true if audio is ready, false otherwise.
+  static Future<bool> ensureAudioReady() {
+    return CameraInterface().ensureAudioReady();
   }
 
   /// set exif preferences when a photo is saved

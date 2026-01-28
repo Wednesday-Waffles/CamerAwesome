@@ -704,6 +704,113 @@
   [_captureSession commitConfiguration];
 }
 
+/// Ensures audio is ready for recording, retrying setup if pre-warm failed.
+///
+/// This method provides "Just-in-Time" audio setup to handle race conditions
+/// where the async pre-warm may not have completed before the user taps record.
+///
+/// @param completion Called with YES if audio is ready, NO with error otherwise.
+///
+/// Thread safety: This method is safe to call from any thread. It dispatches
+/// audio setup work to the capture session's dispatch queue and uses a semaphore
+/// with timeout to prevent deadlocks.
+- (void)ensureAudioReadyWithCompletion:(nonnull void (^)(BOOL success, NSError * _Nullable error))completion {
+  // Fast path: audio already set up
+  if (_videoController.isAudioSetup) {
+    NSLog(@"[CamerAwesome] ensureAudioReady: Already setup, returning immediately");
+    completion(YES, nil);
+    return;
+  }
+
+  // Audio not enabled - nothing to do
+  if (!_videoController.isAudioEnabled) {
+    NSLog(@"[CamerAwesome] ensureAudioReady: Audio disabled, skipping");
+    completion(YES, nil);
+    return;
+  }
+
+  NSLog(@"[CamerAwesome] ensureAudioReady: Audio not ready, attempting JIT setup...");
+
+  // Use semaphore with timeout to prevent deadlocks
+  // The audio setup is async (callback-based), so we can't use dispatch_sync
+  dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+  __block NSError *setupError = nil;
+  __block BOOL setupSuccess = NO;
+
+  // Dispatch audio setup to the capture session queue
+  dispatch_async(_dispatchQueue, ^{
+    [self setUpCaptureSessionForAudioError:^(NSError *error) {
+      if (error) {
+        NSLog(@"[CamerAwesome] ensureAudioReady: JIT setup failed: %@", error.localizedDescription);
+        setupError = error;
+        setupSuccess = NO;
+      } else {
+        // Check if setup actually succeeded by checking the flag
+        setupSuccess = self->_videoController.isAudioSetup;
+        if (!setupSuccess) {
+          setupError = [NSError errorWithDomain:@"CamerAwesome"
+                                           code:1001
+                                       userInfo:@{NSLocalizedDescriptionKey: @"Audio setup completed but audio is not available"}];
+        } else {
+          NSLog(@"[CamerAwesome] ensureAudioReady: JIT setup succeeded");
+        }
+      }
+      dispatch_semaphore_signal(semaphore);
+    }];
+
+    // If setUpCaptureSessionForAudioError returns without calling the error callback
+    // (success case in older code paths), we need to signal anyway
+    if (self->_videoController.isAudioSetup && !setupSuccess) {
+      setupSuccess = YES;
+      dispatch_semaphore_signal(semaphore);
+    }
+  });
+
+  // Wait with 2 second timeout to prevent indefinite blocking
+  dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC);
+  long result = dispatch_semaphore_wait(semaphore, timeout);
+
+  if (result != 0) {
+    // Timeout occurred
+    NSLog(@"[CamerAwesome] ensureAudioReady: Timeout waiting for audio setup");
+    NSError *timeoutError = [NSError errorWithDomain:@"CamerAwesome"
+                                                code:1002
+                                            userInfo:@{NSLocalizedDescriptionKey: @"Audio setup timed out"}];
+    completion(NO, timeoutError);
+    return;
+  }
+
+  // Return result
+  completion(setupSuccess, setupError);
+}
+
+/// Synchronous wrapper for ensureAudioReady for simpler call sites.
+/// Returns YES if audio is ready, NO otherwise.
+/// Sets outError if provided and setup fails.
+- (BOOL)ensureAudioReadyWithError:(NSError * _Nullable * _Nullable)outError {
+  __block BOOL success = NO;
+  __block NSError *error = nil;
+
+  // Use a semaphore since the async version calls back on a different thread
+  dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+
+  [self ensureAudioReadyWithCompletion:^(BOOL s, NSError * _Nullable e) {
+    success = s;
+    error = e;
+    dispatch_semaphore_signal(semaphore);
+  }];
+
+  // Wait with 3 second timeout (slightly longer than internal timeout)
+  dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC);
+  dispatch_semaphore_wait(semaphore, timeout);
+
+  if (outError && error) {
+    *outError = error;
+  }
+
+  return success;
+}
+
 # pragma mark - Camera Delegates
 
 - (void)captureOutput:(AVCaptureOutput *)output didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection {

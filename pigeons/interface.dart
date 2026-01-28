@@ -402,6 +402,12 @@ abstract class CameraInterface {
   @async
   bool setRecordingAudioMode(bool enableAudio);
 
+  /// Ensures audio is ready for recording, retrying setup if pre-warm failed.
+  /// Returns true if audio is ready, false otherwise.
+  /// This is called JIT (just-in-time) before startRecording to handle race conditions.
+  @async
+  bool ensureAudioReady();
+
   List<PreviewSize> availableSizes();
 
   void refresh();

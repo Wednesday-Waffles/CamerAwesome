@@ -736,6 +736,20 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
         }
     }
 
+    /// Ensures audio is ready for recording, retrying setup if pre-warm failed.
+    /// On Android, CameraX handles audio setup internally, so this is a permission check.
+    override fun ensureAudioReady(callback: (Result<Boolean>) -> Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            cameraPermissions.requestPermissions(
+                activity!!,
+                listOf(Manifest.permission.RECORD_AUDIO),
+                CameraPermissions.PERMISSION_RECORD_AUDIO,
+            ) { granted ->
+                Dispatchers.Main.run { callback(Result.success(granted.isNotEmpty())) }
+            }
+        }
+    }
+
     @SuppressLint("RestrictedApi", "UnsafeOptInUsageError")
     override fun availableSizes(): List<PreviewSize> {
         return cameraState.previewSizes().map {

@@ -403,13 +403,35 @@ FlutterEventSink audioLevelEventSink;
     completion(nil, [FlutterError errorWithCode:@"CAMERA_MUST_BE_INIT" message:@"init must be call before start" details:nil]);
     return;
   }
-  
+
   if (self.camera == nil) {
     completion(nil, [FlutterError errorWithCode:@"MULTI_CAMERA_UNSUPPORTED" message:@"this feature is currently not supported with multi camera feature" details:nil]);
     return;
   }
-  
+
   [self.camera setRecordingAudioMode:[enableAudio boolValue] completion:completion];
+}
+
+- (void)ensureAudioReadyWithCompletion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
+  if (self.camera == nil && self.multiCamera == nil) {
+    completion(nil, [FlutterError errorWithCode:@"CAMERA_MUST_BE_INIT" message:@"init must be call before start" details:nil]);
+    return;
+  }
+
+  if (self.camera == nil) {
+    completion(nil, [FlutterError errorWithCode:@"MULTI_CAMERA_UNSUPPORTED" message:@"this feature is currently not supported with multi camera feature" details:nil]);
+    return;
+  }
+
+  [self.camera ensureAudioReadyWithCompletion:^(BOOL success, NSError * _Nullable error) {
+    if (error != nil) {
+      completion(nil, [FlutterError errorWithCode:@"AUDIO_SETUP_FAILED"
+                                          message:error.localizedDescription
+                                          details:nil]);
+    } else {
+      completion(@(success), nil);
+    }
+  }];
 }
 
 - (void)stopRecordingVideoWithCompletion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
