@@ -66,6 +66,7 @@ class CamerawesomeDebugConfig {
     audioSetupFailureMode = AudioSetupFailureMode.none;
     audioPreWarmDelayMs = 1500;
     _audioSetupAttemptCount = 0;
+    skipEnsureAudioReady = false;
   }
 
   /// Enable recording failure simulation with optional custom delay.
@@ -216,6 +217,54 @@ class CamerawesomeDebugConfig {
   // ════════════════════════════════════════════════════════════════════════════
   // NATIVE-LEVEL AUDIO DEBUG (Tests ensureAudioReady() detection mechanism)
   // ════════════════════════════════════════════════════════════════════════════
+
+  /// When true, skips the ensureAudioReady() check before recording.
+  /// This allows reproducing the PRODUCTION BUG where video saves without audio.
+  ///
+  /// Use this to A/B test the JIT audio fix:
+  /// 1. Set [skipEnsureAudioReady] = true  → reproduce bug: silent video
+  /// 2. Set [skipEnsureAudioReady] = false → verify fix: recording blocked
+  ///
+  /// ## Production Bug Reproduction Test
+  ///
+  /// ```dart
+  /// // Step 1: Reproduce the bug (video saves without audio)
+  /// CamerawesomeDebugConfig.instance.enableProductionBugReproduction();
+  /// // Navigate to camera, record video, verify it has NO audio
+  ///
+  /// // Step 2: Verify the fix prevents the bug
+  /// CamerawesomeDebugConfig.instance.enableFixVerification();
+  /// // Navigate to camera, try to record, verify error toast appears
+  /// ```
+  bool skipEnsureAudioReady = false;
+
+  /// Enable reproduction of the production bug where video saves without audio.
+  ///
+  /// This sets:
+  /// - Native mode to fail ALL audio setup attempts
+  /// - Skips ensureAudioReady() check (simulates code before the fix)
+  ///
+  /// Expected result: Video records and saves, but plays back with NO AUDIO.
+  /// This proves the bug exists and the fix is needed.
+  void enableProductionBugReproduction() {
+    audioSetupFailureMode = AudioSetupFailureMode.preWarmFailsRetryFails;
+    skipEnsureAudioReady = true;
+    _audioSetupAttemptCount = 0;
+  }
+
+  /// Enable verification that the fix prevents the production bug.
+  ///
+  /// This sets:
+  /// - Native mode to fail ALL audio setup attempts
+  /// - Enables ensureAudioReady() check (the fix)
+  ///
+  /// Expected result: Recording is blocked with clear error message.
+  /// Video is NOT saved because audio isn't available.
+  void enableFixVerification() {
+    audioSetupFailureMode = AudioSetupFailureMode.preWarmFailsRetryFails;
+    skipEnsureAudioReady = false;
+    _audioSetupAttemptCount = 0;
+  }
 
   /// Convert [AudioSetupFailureMode] to native debug mode integer.
   ///

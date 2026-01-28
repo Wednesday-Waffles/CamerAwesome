@@ -69,9 +69,17 @@ class VideoCameraState extends CameraState {
       // 1. Check if audio is already set up (isAudioSetup flag)
       // 2. If not, retry the audio setup
       // 3. Return success/failure based on actual native state
-      final audioReady = await CamerawesomePlugin.ensureAudioReady();
-      if (!audioReady) {
-        throw AudioSetupException('Microphone is not available');
+      //
+      // DEBUG: skipEnsureAudioReady bypasses this check to reproduce the
+      // production bug where video saves without audio.
+      if (debugConfig.skipEnsureAudioReady) {
+        debugPrint('[CamerAwesome DEBUG] ⚠️ SKIPPING ensureAudioReady() - reproducing production bug');
+        debugPrint('[CamerAwesome DEBUG] Video may record WITHOUT AUDIO if audio setup failed');
+      } else {
+        final audioReady = await CamerawesomePlugin.ensureAudioReady();
+        if (!audioReady) {
+          throw AudioSetupException('Microphone is not available');
+        }
       }
 
       // ════════════════════════════════════════════════════════════════════════
