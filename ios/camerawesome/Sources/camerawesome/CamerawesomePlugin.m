@@ -13,6 +13,7 @@ FlutterEventSink orientationEventSink;
 FlutterEventSink videoRecordingEventSink;
 FlutterEventSink imageStreamEventSink;
 FlutterEventSink physicalButtonEventSink;
+FlutterEventSink audioLevelEventSink;
 
 @interface CamerawesomePlugin () <CameraInterface, AnalysisImageUtils>
 @property(readonly, nonatomic) NSObject<FlutterTextureRegistry> *textureRegistry;
@@ -55,10 +56,13 @@ FlutterEventSink physicalButtonEventSink;
                                                                       binaryMessenger:[registrar messenger]];
   FlutterEventChannel *physicalButtonChannel = [FlutterEventChannel eventChannelWithName:@"camerawesome/physical_button"
                                                                          binaryMessenger:[registrar messenger]];
+  FlutterEventChannel *audioLevelChannel = [FlutterEventChannel eventChannelWithName:@"camerawesome/audio_level"
+                                                                      binaryMessenger:[registrar messenger]];
   [orientationChannel setStreamHandler:instance];
   [imageStreamChannel setStreamHandler:instance];
   [physicalButtonChannel setStreamHandler:instance];
-  
+  [audioLevelChannel setStreamHandler:instance];
+
   CameraInterfaceSetup(registrar.messenger, instance);
   AnalysisImageUtilsSetup(registrar.messenger, instance);
 }
@@ -226,12 +230,18 @@ FlutterEventSink physicalButtonEventSink;
     }
   } else if ([arguments  isEqual: @"physicalButtonChannel"]) {
     physicalButtonEventSink = eventSink;
-    
+
     if (self.camera != nil) {
       [self.camera setPhysicalButtonEventSink:physicalButtonEventSink];
     }
+  } else if ([arguments  isEqual: @"audioLevelChannel"]) {
+    audioLevelEventSink = eventSink;
+
+    if (self.camera != nil) {
+      [self.camera setAudioLevelEventSink:audioLevelEventSink];
+    }
   }
-  
+
   return nil;
 }
 
@@ -250,9 +260,15 @@ FlutterEventSink physicalButtonEventSink;
     }
   } else if ([arguments  isEqual: @"physicalButtonChannel"]) {
     physicalButtonEventSink = nil;
-    
+
     if (self.camera != nil) {
       [self.camera setPhysicalButtonEventSink:physicalButtonEventSink];
+    }
+  } else if ([arguments  isEqual: @"audioLevelChannel"]) {
+    audioLevelEventSink = nil;
+
+    if (self.camera != nil) {
+      [self.camera setAudioLevelEventSink:audioLevelEventSink];
     }
   }
   return nil;
@@ -318,9 +334,9 @@ FlutterEventSink physicalButtonEventSink;
   }
   
   if (self.multiCamera != nil) {
-    [self.multiCamera focusOnPoint:CGPointMake([x floatValue], [y floatValue]) preview:CGSizeMake([previewSize.width floatValue], [previewSize.height floatValue]) error:error];
+    [self.multiCamera focusOnPoint:CGPointMake([x floatValue], [y floatValue]) preview:CGSizeMake((CGFloat)previewSize.width, (CGFloat)previewSize.height) error:error];
   } else {
-    [self.camera focusOnPoint:CGPointMake([x floatValue], [y floatValue]) preview:CGSizeMake([previewSize.width floatValue], [previewSize.height floatValue]) error:error];
+    [self.camera focusOnPoint:CGPointMake([x floatValue], [y floatValue]) preview:CGSizeMake((CGFloat)previewSize.width, (CGFloat)previewSize.height) error:error];
   }
 }
 
@@ -387,13 +403,35 @@ FlutterEventSink physicalButtonEventSink;
     completion(nil, [FlutterError errorWithCode:@"CAMERA_MUST_BE_INIT" message:@"init must be call before start" details:nil]);
     return;
   }
-  
+
   if (self.camera == nil) {
     completion(nil, [FlutterError errorWithCode:@"MULTI_CAMERA_UNSUPPORTED" message:@"this feature is currently not supported with multi camera feature" details:nil]);
     return;
   }
-  
+
   [self.camera setRecordingAudioMode:[enableAudio boolValue] completion:completion];
+}
+
+- (void)ensureAudioReadyWithCompletion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
+  if (self.camera == nil && self.multiCamera == nil) {
+    completion(nil, [FlutterError errorWithCode:@"CAMERA_MUST_BE_INIT" message:@"init must be call before start" details:nil]);
+    return;
+  }
+
+  if (self.camera == nil) {
+    completion(nil, [FlutterError errorWithCode:@"MULTI_CAMERA_UNSUPPORTED" message:@"this feature is currently not supported with multi camera feature" details:nil]);
+    return;
+  }
+
+  [self.camera ensureAudioReadyWithCompletion:^(BOOL success, NSError * _Nullable error) {
+    if (error != nil) {
+      completion(nil, [FlutterError errorWithCode:@"AUDIO_SETUP_FAILED"
+                                          message:error.localizedDescription
+                                          details:nil]);
+    } else {
+      completion(@(success), nil);
+    }
+  }];
 }
 
 - (void)stopRecordingVideoWithCompletion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
@@ -532,7 +570,7 @@ FlutterEventSink physicalButtonEventSink;
     return;
   }
   
-  [self.camera setCameraPreset:CGSizeMake([size.width floatValue], [size.height floatValue])];
+  [self.camera setCameraPreset:CGSizeMake((CGFloat)size.width, (CGFloat)size.height)];
 }
 
 - (void)setAspectRatioAspectRatio:(nonnull NSString *)aspectRatio error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
@@ -581,9 +619,9 @@ FlutterEventSink physicalButtonEventSink;
   }
   
   if (self.multiCamera != nil) {
-    [self.multiCamera setPreviewSize:CGSizeMake([size.width floatValue], [size.height floatValue]) error:error];
+    [self.multiCamera setPreviewSize:CGSizeMake((CGFloat)size.width, (CGFloat)size.height) error:error];
   } else {
-    [self.camera setPreviewSize:CGSizeMake([size.width floatValue], [size.height floatValue]) error:error];
+    [self.camera setPreviewSize:CGSizeMake((CGFloat)size.width, (CGFloat)size.height) error:error];
   }
 }
 
@@ -600,7 +638,7 @@ FlutterEventSink physicalButtonEventSink;
   }
   
   // height & width are inverted, this is intentionnal, because camera is always on portrait mode
-  return [PreviewSize makeWithWidth:@(previewSize.height) height:@(previewSize.width)];
+  return [PreviewSize makeWithWidth:(double)previewSize.height height:(double)previewSize.width];
 }
 
 #pragma mark - Zoom methods
@@ -737,6 +775,27 @@ FlutterEventSink physicalButtonEventSink;
 
 - (nullable NSNumber *)isMultiCamSupportedWithError:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
   return [NSNumber numberWithBool: [MultiCameraController isMultiCamSupported]];
+}
+
+#pragma mark - Debug methods
+
+- (void)setNativeAudioDebugModeMode:(NSInteger)mode delayMs:(NSInteger)delayMs error:(FlutterError *_Nullable *_Nonnull)error {
+  if (self.camera == nil) {
+    // Debug injection is only supported for single camera mode
+    // For multi-camera, just ignore (no-op)
+    return;
+  }
+
+  [self.camera setNativeAudioDebugMode:mode delayMs:delayMs];
+}
+
+- (nullable NSNumber *)isAudioSetupWithError:(FlutterError *_Nullable *_Nonnull)error {
+  if (self.camera == nil) {
+    // Camera not initialized, audio is not set up
+    return @(NO);
+  }
+
+  return @([self.camera isAudioSetup]);
 }
 
 - (void)bgra8888toJpegBgra8888image:(nonnull AnalysisImageWrapper *)bgra8888image jpegQuality:(nonnull NSNumber *)jpegQuality completion:(nonnull void (^)(AnalysisImageWrapper * _Nullable, FlutterError * _Nullable))completion {

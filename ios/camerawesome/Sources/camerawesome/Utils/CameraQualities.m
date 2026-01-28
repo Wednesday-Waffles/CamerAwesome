@@ -46,7 +46,7 @@
   NSArray *qualities = [CameraQualities captureFormatsForDevice:device];
   
   for (PreviewSize *quality in qualities) {
-    CGSize qualitySize = CGSizeMake([quality.width floatValue], [quality.height floatValue]);
+    CGSize qualitySize = CGSizeMake((CGFloat)quality.width, (CGFloat)quality.height);
     AVCaptureSessionPreset currentPreset = [CameraQualities selectPresetForSize:qualitySize session:session];
     
     if ([session canSetSessionPreset:currentPreset]) {

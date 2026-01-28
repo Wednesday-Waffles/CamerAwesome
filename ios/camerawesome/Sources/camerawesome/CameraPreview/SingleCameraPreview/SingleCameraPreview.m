@@ -33,7 +33,12 @@
   _mirrorFrontCamera = mirrorFrontCamera;
   _videoOptions = videoOptions;
   _recordingQuality = recordingQuality;
-  
+
+  // Initialize debug properties to normal mode (no injection)
+  _nativeAudioDebugMode = 0;
+  _nativeAudioDebugDelayMs = 0;
+  _nativeAudioSetupAttemptCount = 0;
+
   // Creating capture session
   _captureSession = [[AVCaptureSession alloc] init];
   _captureVideoOutput = [AVCaptureVideoDataOutput new];
@@ -101,13 +106,39 @@
   }
 }
 
+/// Set audio level Flutter sink for monitoring audio during recording
+- (void)setAudioLevelEventSink:(FlutterEventSink)audioLevelEventSink {
+  if (_videoController != nil) {
+    if (audioLevelEventSink != nil) {
+      // Wire up the callback to send audio levels to Flutter
+      __weak typeof(self) weakSelf = self;
+      _videoController.onAudioLevelUpdate = ^(float level) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (strongSelf == nil) return;
+
+        // Only send if we have a valid sink and are recording
+        if (audioLevelEventSink != nil && strongSelf->_videoController.isRecording) {
+          // IMPORTANT: Flutter event channels must be called from the main thread
+          // The audio callback is invoked from the audio processing queue
+          dispatch_async(dispatch_get_main_queue(), ^{
+            audioLevelEventSink(@(level));
+          });
+        }
+      };
+    } else {
+      // Clear the callback when sink is cancelled
+      _videoController.onAudioLevelUpdate = nil;
+    }
+  }
+}
+
 // TODO: move this to a QualityController
 /// Assign the default preview qualities
 - (void)setBestPreviewQuality {
   NSArray *qualities = [CameraQualities captureFormatsForDevice:_captureDevice];
-  PreviewSize *firstPreviewSize = [qualities count] > 0 ? qualities.lastObject : [PreviewSize makeWithWidth:@3840 height:@2160];
-  
-  CGSize firstSize = CGSizeMake([firstPreviewSize.width floatValue], [firstPreviewSize.height floatValue]);
+  PreviewSize *firstPreviewSize = [qualities count] > 0 ? qualities.lastObject : [PreviewSize makeWithWidth:3840.0 height:2160.0];
+
+  CGSize firstSize = CGSizeMake((CGFloat)firstPreviewSize.width, (CGFloat)firstPreviewSize.height);
   [self setCameraPreset:firstSize];
 }
 
@@ -245,15 +276,24 @@
 
 /// Dispose camera inputs & outputs
 - (void)dispose {
+  // Clear callbacks first to prevent execution during cleanup
+  self.onFirstFrameReceived = nil;
+  self.onPreviewFrameAvailable = nil;
+
   [self stop];
   [self.physicalButtonController stopListening];
-  
+
+  // Wrap removal in configuration for atomic cleanup
+  [_captureSession beginConfiguration];
+
   for (AVCaptureInput *input in [_captureSession inputs]) {
     [_captureSession removeInput:input];
   }
   for (AVCaptureOutput *output in [_captureSession outputs]) {
     [_captureSession removeOutput:output];
   }
+
+  [_captureSession commitConfiguration];
 }
 
 /// Set preview size resolution
@@ -268,17 +308,54 @@
   }
   [self setCameraPreset:previewSize];
   if (sessionIsRunning) {
+    __weak typeof(self) weakSelf = self;
     dispatch_async(_dispatchQueue, ^{
-      [self->_captureSession startRunning];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf) return;
+      [strongSelf->_captureSession startRunning];
     });
   }
 }
 
 /// Start camera preview
 - (void)start {
+  // Create semaphore to wait for first frame
+  dispatch_semaphore_t firstFrameSemaphore = dispatch_semaphore_create(0);
+
+  // Set up one-shot callback to signal when first frame is received
+  self.onFirstFrameReceived = ^{
+    dispatch_semaphore_signal(firstFrameSemaphore);
+  };
+
+  // Use weak reference to prevent retain cycle and accessing deallocated memory
+  __weak typeof(self) weakSelf = self;
+
+  // Start the capture session
   dispatch_async(_dispatchQueue, ^{
-    [self->_captureSession startRunning];
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf) return;
+
+    [strongSelf->_captureSession startRunning];
+
+    // Pre-warm audio input/output to avoid cold-start sync issues on first recording
+    // Without this, first recording has audio delay because audio is set up on-demand
+    if (strongSelf->_videoController.isAudioEnabled && !strongSelf->_videoController.isAudioSetup) {
+      [strongSelf setUpCaptureSessionForAudioError:^(NSError *error) {
+        // Audio setup failed, but we can continue - it will be retried when recording starts
+        NSLog(@"[CamerAwesome] Audio pre-warm failed: %@", error.localizedDescription);
+      }];
+    }
   });
+
+  // Wait for first frame with timeout (2 seconds max)
+  // This ensures camera is actually delivering frames before returning
+  dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC);
+  long result = dispatch_semaphore_wait(firstFrameSemaphore, timeout);
+  if (result != 0) {
+    NSLog(@"[CamerAwesome] Warning: Timeout waiting for first camera frame");
+    // Clear the callback since we're giving up waiting
+    self.onFirstFrameReceived = nil;
+  }
 }
 
 /// Stop camera preview
@@ -305,8 +382,9 @@
       }
     }
   }
-  [_videoController setAudioIsDisconnected:YES];
-  
+  // Video is being switched (not audio), so set videoIsDisconnected for proper gap compensation
+  [_videoController setVideoIsDisconnected:YES];
+
   [_captureSession removeOutput:_capturePhotoOutput];
   [_captureSession removeConnection:_captureConnection];
   
@@ -315,13 +393,20 @@
   
   // Init the camera preview with the selected sensor
   [self initCameraPreview:sensor.position];
-  
+
+  // Update VideoController with new capture device to re-apply custom FPS if recording
+  // This fixes audio/video desync when switching cameras during recording with custom FPS
+  [_videoController updateCaptureDevice:_captureDevice];
+
   [self setBestPreviewQuality];
   
   [_captureSession commitConfiguration];
   if (sessionIsRunning) {
+    __weak typeof(self) weakSelf = self;
     dispatch_async(_dispatchQueue, ^{
-      [self->_captureSession startRunning];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf) return;
+      [strongSelf->_captureSession startRunning];
     });
   }
 }
@@ -589,9 +674,83 @@
   completion(@(YES), nil);
 }
 
+# pragma mark - Audio Debug Injection
+
+/// Sets native-level audio debug mode for testing.
+/// This allows testing that ensureAudioReady() correctly detects and handles audio failures.
+- (void)setNativeAudioDebugMode:(NSInteger)mode delayMs:(NSInteger)delayMs {
+  NSLog(@"[CamerAwesome] setNativeAudioDebugMode: mode=%ld, delayMs=%ld", (long)mode, (long)delayMs);
+  _nativeAudioDebugMode = mode;
+  _nativeAudioDebugDelayMs = delayMs;
+  // Reset attempt count when changing modes
+  _nativeAudioSetupAttemptCount = 0;
+}
+
+/// Returns YES if audio is currently set up and ready for recording.
+- (BOOL)isAudioSetup {
+  BOOL isSetup = _videoController.isAudioSetup;
+  NSLog(@"[CamerAwesome] isAudioSetup check: %@", isSetup ? @"YES" : @"NO");
+  return isSetup;
+}
+
 # pragma mark - Audio
 /// Setup audio channel to record audio
 - (void)setUpCaptureSessionForAudioError:(nonnull void (^)(NSError *))error {
+  // Increment attempt count for debug tracking
+  _nativeAudioSetupAttemptCount++;
+  NSLog(@"[CamerAwesome] setUpCaptureSessionForAudioError: attempt %ld, debugMode=%ld",
+        (long)_nativeAudioSetupAttemptCount, (long)_nativeAudioDebugMode);
+
+  // Handle debug injection modes
+  if (_nativeAudioDebugMode > 0) {
+    NSError *debugError = nil;
+
+    switch (_nativeAudioDebugMode) {
+      case 1: // preWarmFailsRetrySucceeds - first attempt fails, subsequent attempts succeed
+        if (_nativeAudioSetupAttemptCount == 1) {
+          NSLog(@"[CamerAwesome] DEBUG: Simulating pre-warm failure (attempt 1)");
+          // Simulate failure by NOT setting isAudioSetup
+          [_videoController setIsAudioSetup:NO];
+          debugError = [NSError errorWithDomain:@"CamerAwesome.Debug"
+                                           code:9001
+                                       userInfo:@{NSLocalizedDescriptionKey: @"[DEBUG] Pre-warm audio setup simulated failure"}];
+          error(debugError);
+          return;
+        }
+        NSLog(@"[CamerAwesome] DEBUG: Allowing retry to succeed (attempt %ld)", (long)_nativeAudioSetupAttemptCount);
+        break;
+
+      case 2: // preWarmFailsRetryFails - all attempts fail
+        NSLog(@"[CamerAwesome] DEBUG: Simulating all audio setup failures (attempt %ld)", (long)_nativeAudioSetupAttemptCount);
+        [_videoController setIsAudioSetup:NO];
+        debugError = [NSError errorWithDomain:@"CamerAwesome.Debug"
+                                         code:9002
+                                     userInfo:@{NSLocalizedDescriptionKey: @"[DEBUG] All audio setup attempts simulated failure"}];
+        error(debugError);
+        return;
+
+      case 3: // preWarmDelayed - slow setup simulating race condition
+        NSLog(@"[CamerAwesome] DEBUG: Delaying audio setup by %ldms", (long)_nativeAudioDebugDelayMs);
+        if (_nativeAudioDebugDelayMs > 0) {
+          [NSThread sleepForTimeInterval:_nativeAudioDebugDelayMs / 1000.0];
+        }
+        // Fall through to normal setup after delay
+        break;
+
+      case 4: // permissionDenied - simulate permission error
+        NSLog(@"[CamerAwesome] DEBUG: Simulating permission denied error");
+        [_videoController setIsAudioSetup:NO];
+        debugError = [NSError errorWithDomain:AVFoundationErrorDomain
+                                         code:AVErrorApplicationIsNotAuthorizedToUseDevice
+                                     userInfo:@{NSLocalizedDescriptionKey: @"[DEBUG] Simulated microphone permission denied"}];
+        error(debugError);
+        return;
+
+      default:
+        // Unknown mode, fall through to normal setup
+        break;
+    }
+  }
   NSError *audioError = nil;
   // Create a device input with the device and add it to the session.
   // Setup the audio input.
@@ -600,14 +759,19 @@
                                                                            error:&audioError];
   if (audioError) {
     error(audioError);
+    return;
   }
-  
+
   // Setup the audio output.
   _audioOutput = [[AVCaptureAudioDataOutput alloc] init];
-  
+
+  // Wrap session modifications in configuration for atomic changes
+  // This prevents race conditions when called during session startup
+  [_captureSession beginConfiguration];
+
   if ([_captureSession canAddInput:audioInput]) {
     [_captureSession addInput:audioInput];
-    
+
     if ([_captureSession canAddOutput:_audioOutput]) {
       [_captureSession addOutput:_audioOutput];
       [_videoController setIsAudioSetup:YES];
@@ -615,6 +779,115 @@
       [_videoController setIsAudioSetup:NO];
     }
   }
+
+  [_captureSession commitConfiguration];
+}
+
+/// Ensures audio is ready for recording, retrying setup if pre-warm failed.
+///
+/// This method provides "Just-in-Time" audio setup to handle race conditions
+/// where the async pre-warm may not have completed before the user taps record.
+///
+/// @param completion Called with YES if audio is ready, NO with error otherwise.
+///
+/// Thread safety: This method is safe to call from any thread. It dispatches
+/// audio setup work to the capture session's dispatch queue and uses a semaphore
+/// with timeout to prevent deadlocks.
+- (void)ensureAudioReadyWithCompletion:(nonnull void (^)(BOOL success, NSError * _Nullable error))completion {
+  // Fast path: audio already set up
+  if (_videoController.isAudioSetup) {
+    NSLog(@"[CamerAwesome] ensureAudioReady: Already setup, returning immediately");
+    completion(YES, nil);
+    return;
+  }
+
+  // Audio not enabled - nothing to do
+  if (!_videoController.isAudioEnabled) {
+    NSLog(@"[CamerAwesome] ensureAudioReady: Audio disabled, skipping");
+    completion(YES, nil);
+    return;
+  }
+
+  NSLog(@"[CamerAwesome] ensureAudioReady: Audio not ready, attempting JIT setup...");
+
+  // Use semaphore with timeout to prevent deadlocks
+  // The audio setup is async (callback-based), so we can't use dispatch_sync
+  dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+  __block NSError *setupError = nil;
+  __block BOOL setupSuccess = NO;
+
+  // Dispatch audio setup to the capture session queue
+  dispatch_async(_dispatchQueue, ^{
+    [self setUpCaptureSessionForAudioError:^(NSError *error) {
+      if (error) {
+        NSLog(@"[CamerAwesome] ensureAudioReady: JIT setup failed: %@", error.localizedDescription);
+        setupError = error;
+        setupSuccess = NO;
+      } else {
+        // Check if setup actually succeeded by checking the flag
+        setupSuccess = self->_videoController.isAudioSetup;
+        if (!setupSuccess) {
+          setupError = [NSError errorWithDomain:@"CamerAwesome"
+                                           code:1001
+                                       userInfo:@{NSLocalizedDescriptionKey: @"Audio setup completed but audio is not available"}];
+        } else {
+          NSLog(@"[CamerAwesome] ensureAudioReady: JIT setup succeeded");
+        }
+      }
+      dispatch_semaphore_signal(semaphore);
+    }];
+
+    // If setUpCaptureSessionForAudioError returns without calling the error callback
+    // (success case in older code paths), we need to signal anyway
+    if (self->_videoController.isAudioSetup && !setupSuccess) {
+      setupSuccess = YES;
+      dispatch_semaphore_signal(semaphore);
+    }
+  });
+
+  // Wait with 2 second timeout to prevent indefinite blocking
+  dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC);
+  long result = dispatch_semaphore_wait(semaphore, timeout);
+
+  if (result != 0) {
+    // Timeout occurred
+    NSLog(@"[CamerAwesome] ensureAudioReady: Timeout waiting for audio setup");
+    NSError *timeoutError = [NSError errorWithDomain:@"CamerAwesome"
+                                                code:1002
+                                            userInfo:@{NSLocalizedDescriptionKey: @"Audio setup timed out"}];
+    completion(NO, timeoutError);
+    return;
+  }
+
+  // Return result
+  completion(setupSuccess, setupError);
+}
+
+/// Synchronous wrapper for ensureAudioReady for simpler call sites.
+/// Returns YES if audio is ready, NO otherwise.
+/// Sets outError if provided and setup fails.
+- (BOOL)ensureAudioReadyWithError:(NSError * _Nullable * _Nullable)outError {
+  __block BOOL success = NO;
+  __block NSError *error = nil;
+
+  // Use a semaphore since the async version calls back on a different thread
+  dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+
+  [self ensureAudioReadyWithCompletion:^(BOOL s, NSError * _Nullable e) {
+    success = s;
+    error = e;
+    dispatch_semaphore_signal(semaphore);
+  }];
+
+  // Wait with 3 second timeout (slightly longer than internal timeout)
+  dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC);
+  dispatch_semaphore_wait(semaphore, timeout);
+
+  if (outError && error) {
+    *outError = error;
+  }
+
+  return success;
 }
 
 # pragma mark - Camera Delegates
@@ -624,6 +897,13 @@
     [self.previewTexture updateBuffer:sampleBuffer];
     if (_onPreviewFrameAvailable) {
       _onPreviewFrameAvailable();
+    }
+
+    // Signal first frame received (one-shot callback)
+    if (_onFirstFrameReceived) {
+      void (^callback)(void) = _onFirstFrameReceived;
+      _onFirstFrameReceived = nil; // Clear to ensure one-shot behavior
+      callback();
     }
 
     // Send to image stream controller if enabled

@@ -15,6 +15,9 @@ NS_ASSUME_NONNULL_BEGIN
 typedef void(^OnAudioSetup)(void);
 typedef void(^OnVideoWriterSetup)(void);
 
+/// Callback for audio level updates (0.0 to 1.0)
+typedef void(^OnAudioLevelUpdate)(float level);
+
 @interface VideoController : NSObject
 
 @property(readonly, nonatomic) bool isRecording;
@@ -36,6 +39,7 @@ typedef void(^OnVideoWriterSetup)(void);
 @property(assign, nonatomic) CMTime lastAudioSampleTime;
 @property(assign, nonatomic) CMTime videoTimeOffset;
 @property(assign, nonatomic) CMTime audioTimeOffset;
+@property(nonatomic, copy, nullable) OnAudioLevelUpdate onAudioLevelUpdate;
 
 - (instancetype)init;
 - (void)recordVideoAtPath:(NSString *)path captureDevice:(AVCaptureDevice *)device orientation:(NSInteger)orientation audioSetupCallback:(OnAudioSetup)audioSetupCallback videoWriterCallback:(OnVideoWriterSetup)videoWriterCallback options:(CupertinoVideoOptions *)options quality:(VideoRecordingQuality)quality completion:(nonnull void (^)(FlutterError * _Nullable))completion;
@@ -48,6 +52,7 @@ typedef void(^OnVideoWriterSetup)(void);
 - (void)setVideoIsDisconnected:(bool)videoIsDisconnected;
 - (void)setAudioIsDisconnected:(bool)audioIsDisconnected;
 - (void)setPreviewSize:(CGSize)previewSize;
+- (void)updateCaptureDevice:(AVCaptureDevice *)device;
 
 @end
 

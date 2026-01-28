@@ -10,7 +10,9 @@ import 'package:collection/collection.dart';
 import 'package:flutter/services.dart';
 
 export 'src/camera_characteristics/camera_characteristics.dart';
+export 'src/debug/camerawesome_debug_config.dart';
 export 'src/orchestrator/analysis/analysis_controller.dart';
+export 'src/preview_size_extensions.dart';
 export 'src/orchestrator/models/models.dart';
 export 'src/orchestrator/models/sensor_type.dart';
 export 'src/orchestrator/models/sensors.dart';
@@ -42,6 +44,9 @@ class CamerawesomePlugin {
   static const EventChannel _physicalButtonChannel =
       EventChannel('camerawesome/physical_button');
 
+  static const EventChannel _audioLevelChannel =
+      EventChannel('camerawesome/audio_level');
+
   static Stream<CameraOrientations>? _orientationStream;
 
   static Stream<CameraPhysicalButton>? _physicalButtonStream;
@@ -49,6 +54,8 @@ class CamerawesomePlugin {
   static Stream<bool>? _permissionsStream;
 
   static Stream<Map<String, dynamic>>? _imagesStream;
+
+  static Stream<double>? _audioLevelStream;
 
   static CameraRunningState currentState = CameraRunningState.stopped;
 
@@ -171,6 +178,29 @@ class CamerawesomePlugin {
       ),
     );
     return _imagesStream;
+  }
+
+  /// Listen to audio level updates during video recording.
+  ///
+  /// Returns a stream of audio levels from 0.0 (silence) to 1.0 (max volume).
+  /// Only emits values while recording is active and audio is enabled.
+  ///
+  /// This is useful for:
+  /// - Showing audio level indicators in the UI
+  /// - Detecting if no audio is being captured (e.g., microphone issues)
+  /// - Warning users if audio levels are too low or too high
+  static Stream<double>? listenAudioLevel() {
+    _audioLevelStream ??=
+        _audioLevelChannel.receiveBroadcastStream('audioLevelChannel').transform(
+      StreamTransformer<dynamic, double>.fromHandlers(
+        handleData: (data, sink) {
+          if (data is num) {
+            sink.add(data.toDouble());
+          }
+        },
+      ),
+    );
+    return _audioLevelStream;
   }
 
   static Future receivedImageFromStream() {
@@ -360,6 +390,49 @@ class CamerawesomePlugin {
   /// enable audio mode recording or not
   static Future<void> setAudioMode(bool enableAudio) {
     return CameraInterface().setRecordingAudioMode(enableAudio);
+  }
+
+  /// Ensures audio is ready for recording, retrying setup if pre-warm failed.
+  ///
+  /// This is called JIT (just-in-time) before startRecording to handle race
+  /// conditions where the user taps record before audio pre-warm completes.
+  ///
+  /// Returns true if audio is ready, false otherwise.
+  static Future<bool> ensureAudioReady() {
+    return CameraInterface().ensureAudioReady();
+  }
+
+  /// Sets native-level audio debug configuration for testing.
+  ///
+  /// This injects failures at the NATIVE layer so we can test that
+  /// [ensureAudioReady] properly detects and handles audio setup failures.
+  ///
+  /// [mode] values:
+  /// - 0: none (normal behavior)
+  /// - 1: preWarmFailsRetrySucceeds (first attempt fails, retry succeeds)
+  /// - 2: preWarmFailsRetryFails (all attempts fail)
+  /// - 3: preWarmDelayed (slow setup, simulates race condition)
+  /// - 4: permissionDenied (simulate permission error)
+  ///
+  /// [delayMs]: Delay in milliseconds for mode 3 (preWarmDelayed).
+  ///
+  /// Note: On Android, this is a no-op since CameraX handles audio internally.
+  /// The native debug injection is primarily useful for iOS testing.
+  static Future<void> setNativeAudioDebugMode(int mode, {int delayMs = 0}) {
+    return CameraInterface().setNativeAudioDebugMode(mode, delayMs);
+  }
+
+  /// Returns true if audio is currently set up and ready for recording.
+  ///
+  /// This queries the actual native state - useful for debugging and verification.
+  /// When reproducing the audio failure bug:
+  /// - If this returns false AFTER camera init, the reproduction is working
+  /// - If this returns true, the debug injection didn't work as expected
+  ///
+  /// On iOS: Returns the actual isAudioSetup flag from the video controller.
+  /// On Android: Returns whether RECORD_AUDIO permission is granted.
+  static Future<bool> isAudioSetup() {
+    return CameraInterface().isAudioSetup();
   }
 
   /// set exif preferences when a photo is saved

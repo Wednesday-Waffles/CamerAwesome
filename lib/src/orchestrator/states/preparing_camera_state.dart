@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:camerawesome/pigeon.dart';
-import 'package:camerawesome/src/orchestrator/exceptions/camera_states_exceptions.dart';
 import 'package:camerawesome/src/orchestrator/models/camera_physical_button.dart';
+import 'package:flutter/foundation.dart';
 
 /// When is not ready
 class PreparingCameraState extends CameraState {
@@ -137,9 +137,22 @@ class PreparingCameraState extends CameraState {
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
-    cameraContext.changeState(VideoCameraState.from(cameraContext));
 
-    return CamerawesomePlugin.start();
+    // Set native audio debug mode AFTER init but BEFORE start
+    // so that pre-warm (which happens on first frame in start) respects the debug flags
+    final debugConfig = CamerawesomeDebugConfig.instance;
+    if (debugConfig.audioSetupFailureMode != AudioSetupFailureMode.none) {
+      final nativeMode = debugConfig.nativeAudioDebugMode;
+      final delayMs = debugConfig.audioPreWarmDelayMs;
+      debugPrint('[CamerAwesome DEBUG] Setting native audio debug mode before start(): $nativeMode (delay: ${delayMs}ms)');
+      await CamerawesomePlugin.setNativeAudioDebugMode(nativeMode, delayMs: delayMs);
+    }
+
+    // Start camera BEFORE changing state to ensure frames are flowing
+    // when the UI shows the record button. The native start() method
+    // blocks until the first frame is received.
+    await CamerawesomePlugin.start();
+    cameraContext.changeState(VideoCameraState.from(cameraContext));
   }
 
   Future _startPhotoMode() async {
@@ -148,9 +161,10 @@ class PreparingCameraState extends CameraState {
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
+    // Start camera BEFORE changing state to ensure frames are flowing.
+    // The native start() method blocks until the first frame is received.
+    await CamerawesomePlugin.start();
     cameraContext.changeState(PhotoCameraState.from(cameraContext));
-
-    return CamerawesomePlugin.start();
   }
 
   Future _startPreviewMode() async {
@@ -159,9 +173,10 @@ class PreparingCameraState extends CameraState {
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
+    // Start camera BEFORE changing state to ensure frames are flowing.
+    // The native start() method blocks until the first frame is received.
+    await CamerawesomePlugin.start();
     cameraContext.changeState(PreviewCameraState.from(cameraContext));
-
-    return CamerawesomePlugin.start();
   }
 
   Future _startAnalysisMode() async {

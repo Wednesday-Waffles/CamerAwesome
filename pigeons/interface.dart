@@ -402,6 +402,12 @@ abstract class CameraInterface {
   @async
   bool setRecordingAudioMode(bool enableAudio);
 
+  /// Ensures audio is ready for recording, retrying setup if pre-warm failed.
+  /// Returns true if audio is ready, false otherwise.
+  /// This is called JIT (just-in-time) before startRecording to handle race conditions.
+  @async
+  bool ensureAudioReady();
+
   List<PreviewSize> availableSizes();
 
   void refresh();
@@ -434,4 +440,27 @@ abstract class CameraInterface {
   bool isVideoRecordingAndImageAnalysisSupported(PigeonSensorPosition sensor);
 
   bool isMultiCamSupported();
+
+  /// Set native-level audio debug configuration for testing.
+  ///
+  /// This injects failures at the NATIVE layer so we can test that
+  /// ensureAudioReady() properly detects and handles audio setup failures.
+  ///
+  /// [mode] values:
+  /// - 0: none (normal behavior)
+  /// - 1: preWarmFailsRetrySucceeds (first attempt fails, retry succeeds)
+  /// - 2: preWarmFailsRetryFails (all attempts fail)
+  /// - 3: preWarmDelayed (slow setup, simulates race condition)
+  /// - 4: permissionDenied (simulate permission error)
+  ///
+  /// [delayMs]: Delay in milliseconds for mode 3 (preWarmDelayed).
+  void setNativeAudioDebugMode(int mode, int delayMs);
+
+  /// Returns true if audio is currently set up and ready for recording.
+  /// This is the actual native state - use for debugging/verification.
+  ///
+  /// When testing audio failure reproduction:
+  /// - If this returns false AFTER camera init, the reproduction is working
+  /// - If this returns true, the debug injection didn't work as expected
+  bool isAudioSetup();
 }
