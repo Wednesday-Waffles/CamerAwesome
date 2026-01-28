@@ -185,6 +185,51 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
       //      *error = [FlutterError errorWithCode:@"VIDEO_ERROR" message:@"adding audio channel failed" details:_videoWriter.error];
     }
   }
+
+  // Calculate audio level and notify callback
+  if (_onAudioLevelUpdate != nil) {
+    float level = [self calculateAudioLevelFromSampleBuffer:sampleBuffer];
+    _onAudioLevelUpdate(level);
+  }
+}
+
+/// Calculate RMS audio level from sample buffer (returns 0.0 to 1.0)
+- (float)calculateAudioLevelFromSampleBuffer:(CMSampleBufferRef)sampleBuffer {
+  CMBlockBufferRef blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer);
+  if (blockBuffer == NULL) {
+    return 0.0f;
+  }
+
+  size_t length = 0;
+  char *data = NULL;
+  CMBlockBufferGetDataPointer(blockBuffer, 0, NULL, &length, &data);
+
+  if (data == NULL || length == 0) {
+    return 0.0f;
+  }
+
+  // Assuming 16-bit PCM audio
+  int16_t *samples = (int16_t *)data;
+  size_t sampleCount = length / sizeof(int16_t);
+
+  if (sampleCount == 0) {
+    return 0.0f;
+  }
+
+  // Calculate RMS (Root Mean Square)
+  double sumSquares = 0.0;
+  for (size_t i = 0; i < sampleCount; i++) {
+    double sample = (double)samples[i] / 32768.0; // Normalize to -1.0 to 1.0
+    sumSquares += sample * sample;
+  }
+
+  double rms = sqrt(sumSquares / sampleCount);
+
+  // Convert to 0-1 range (RMS of full-scale sine wave is ~0.707)
+  // We use a slightly lower reference to make levels more visible
+  float level = (float)fmin(rms / 0.5, 1.0);
+
+  return level;
 }
 
 /// Adjust time to sync audio & video

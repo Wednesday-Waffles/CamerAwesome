@@ -61,6 +61,7 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
     private var activity: Activity? = null
     private lateinit var imageStreamChannel: EventChannel
     private lateinit var orientationStreamChannel: EventChannel
+    private lateinit var audioLevelChannel: EventChannel
     private var orientationStreamListener: OrientationStreamListener? = null
     private val sensorOrientationListener: SensorOrientationListener = SensorOrientationListener()
 
@@ -811,6 +812,11 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
         EventChannel(binding.binaryMessenger, "camerawesome/physical_button").setStreamHandler(
             physicalButtonHandler
         )
+        // Audio level channel - placeholder for now
+        // Android's CameraX doesn't provide direct audio sample access like iOS
+        // Full implementation would require using AudioRecord separately
+        audioLevelChannel = EventChannel(binding.binaryMessenger, "camerawesome/audio_level")
+        // audioLevelChannel.setStreamHandler(audioLevelHandler) // TODO: implement AudioLevelHandler
     }
 
     override fun onDetachedFromEngine(binding: FlutterPluginBinding) {

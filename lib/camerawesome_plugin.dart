@@ -43,6 +43,9 @@ class CamerawesomePlugin {
   static const EventChannel _physicalButtonChannel =
       EventChannel('camerawesome/physical_button');
 
+  static const EventChannel _audioLevelChannel =
+      EventChannel('camerawesome/audio_level');
+
   static Stream<CameraOrientations>? _orientationStream;
 
   static Stream<CameraPhysicalButton>? _physicalButtonStream;
@@ -50,6 +53,8 @@ class CamerawesomePlugin {
   static Stream<bool>? _permissionsStream;
 
   static Stream<Map<String, dynamic>>? _imagesStream;
+
+  static Stream<double>? _audioLevelStream;
 
   static CameraRunningState currentState = CameraRunningState.stopped;
 
@@ -172,6 +177,29 @@ class CamerawesomePlugin {
       ),
     );
     return _imagesStream;
+  }
+
+  /// Listen to audio level updates during video recording.
+  ///
+  /// Returns a stream of audio levels from 0.0 (silence) to 1.0 (max volume).
+  /// Only emits values while recording is active and audio is enabled.
+  ///
+  /// This is useful for:
+  /// - Showing audio level indicators in the UI
+  /// - Detecting if no audio is being captured (e.g., microphone issues)
+  /// - Warning users if audio levels are too low or too high
+  static Stream<double>? listenAudioLevel() {
+    _audioLevelStream ??=
+        _audioLevelChannel.receiveBroadcastStream('audioLevelChannel').transform(
+      StreamTransformer<dynamic, double>.fromHandlers(
+        handleData: (data, sink) {
+          if (data is num) {
+            sink.add(data.toDouble());
+          }
+        },
+      ),
+    );
+    return _audioLevelStream;
   }
 
   static Future receivedImageFromStream() {

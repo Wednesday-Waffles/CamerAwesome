@@ -101,6 +101,29 @@
   }
 }
 
+/// Set audio level Flutter sink for monitoring audio during recording
+- (void)setAudioLevelEventSink:(FlutterEventSink)audioLevelEventSink {
+  if (_videoController != nil) {
+    if (audioLevelEventSink != nil) {
+      // Wire up the callback to send audio levels to Flutter
+      __weak typeof(self) weakSelf = self;
+      _videoController.onAudioLevelUpdate = ^(float level) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (strongSelf == nil) return;
+
+        // Only send if we have a valid sink and are recording
+        if (audioLevelEventSink != nil && strongSelf->_videoController.isRecording) {
+          // Send audio level as a double to Flutter
+          audioLevelEventSink(@(level));
+        }
+      };
+    } else {
+      // Clear the callback when sink is cancelled
+      _videoController.onAudioLevelUpdate = nil;
+    }
+  }
+}
+
 // TODO: move this to a QualityController
 /// Assign the default preview qualities
 - (void)setBestPreviewQuality {

@@ -13,6 +13,7 @@ FlutterEventSink orientationEventSink;
 FlutterEventSink videoRecordingEventSink;
 FlutterEventSink imageStreamEventSink;
 FlutterEventSink physicalButtonEventSink;
+FlutterEventSink audioLevelEventSink;
 
 @interface CamerawesomePlugin () <CameraInterface, AnalysisImageUtils>
 @property(readonly, nonatomic) NSObject<FlutterTextureRegistry> *textureRegistry;
@@ -55,10 +56,13 @@ FlutterEventSink physicalButtonEventSink;
                                                                       binaryMessenger:[registrar messenger]];
   FlutterEventChannel *physicalButtonChannel = [FlutterEventChannel eventChannelWithName:@"camerawesome/physical_button"
                                                                          binaryMessenger:[registrar messenger]];
+  FlutterEventChannel *audioLevelChannel = [FlutterEventChannel eventChannelWithName:@"camerawesome/audio_level"
+                                                                      binaryMessenger:[registrar messenger]];
   [orientationChannel setStreamHandler:instance];
   [imageStreamChannel setStreamHandler:instance];
   [physicalButtonChannel setStreamHandler:instance];
-  
+  [audioLevelChannel setStreamHandler:instance];
+
   CameraInterfaceSetup(registrar.messenger, instance);
   AnalysisImageUtilsSetup(registrar.messenger, instance);
 }
@@ -226,12 +230,18 @@ FlutterEventSink physicalButtonEventSink;
     }
   } else if ([arguments  isEqual: @"physicalButtonChannel"]) {
     physicalButtonEventSink = eventSink;
-    
+
     if (self.camera != nil) {
       [self.camera setPhysicalButtonEventSink:physicalButtonEventSink];
     }
+  } else if ([arguments  isEqual: @"audioLevelChannel"]) {
+    audioLevelEventSink = eventSink;
+
+    if (self.camera != nil) {
+      [self.camera setAudioLevelEventSink:audioLevelEventSink];
+    }
   }
-  
+
   return nil;
 }
 
@@ -250,9 +260,15 @@ FlutterEventSink physicalButtonEventSink;
     }
   } else if ([arguments  isEqual: @"physicalButtonChannel"]) {
     physicalButtonEventSink = nil;
-    
+
     if (self.camera != nil) {
       [self.camera setPhysicalButtonEventSink:physicalButtonEventSink];
+    }
+  } else if ([arguments  isEqual: @"audioLevelChannel"]) {
+    audioLevelEventSink = nil;
+
+    if (self.camera != nil) {
+      [self.camera setAudioLevelEventSink:audioLevelEventSink];
     }
   }
   return nil;
