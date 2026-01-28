@@ -10,6 +10,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/services.dart';
 
 export 'src/camera_characteristics/camera_characteristics.dart';
+export 'src/debug/camerawesome_debug_config.dart';
 export 'src/orchestrator/analysis/analysis_controller.dart';
 export 'src/orchestrator/models/models.dart';
 export 'src/orchestrator/models/sensor_type.dart';
