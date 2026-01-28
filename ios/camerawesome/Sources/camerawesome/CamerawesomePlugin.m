@@ -334,9 +334,9 @@ FlutterEventSink audioLevelEventSink;
   }
   
   if (self.multiCamera != nil) {
-    [self.multiCamera focusOnPoint:CGPointMake([x floatValue], [y floatValue]) preview:CGSizeMake([previewSize.width floatValue], [previewSize.height floatValue]) error:error];
+    [self.multiCamera focusOnPoint:CGPointMake([x floatValue], [y floatValue]) preview:CGSizeMake((CGFloat)previewSize.width, (CGFloat)previewSize.height) error:error];
   } else {
-    [self.camera focusOnPoint:CGPointMake([x floatValue], [y floatValue]) preview:CGSizeMake([previewSize.width floatValue], [previewSize.height floatValue]) error:error];
+    [self.camera focusOnPoint:CGPointMake([x floatValue], [y floatValue]) preview:CGSizeMake((CGFloat)previewSize.width, (CGFloat)previewSize.height) error:error];
   }
 }
 
@@ -570,7 +570,7 @@ FlutterEventSink audioLevelEventSink;
     return;
   }
   
-  [self.camera setCameraPreset:CGSizeMake([size.width floatValue], [size.height floatValue])];
+  [self.camera setCameraPreset:CGSizeMake((CGFloat)size.width, (CGFloat)size.height)];
 }
 
 - (void)setAspectRatioAspectRatio:(nonnull NSString *)aspectRatio error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
@@ -619,9 +619,9 @@ FlutterEventSink audioLevelEventSink;
   }
   
   if (self.multiCamera != nil) {
-    [self.multiCamera setPreviewSize:CGSizeMake([size.width floatValue], [size.height floatValue]) error:error];
+    [self.multiCamera setPreviewSize:CGSizeMake((CGFloat)size.width, (CGFloat)size.height) error:error];
   } else {
-    [self.camera setPreviewSize:CGSizeMake([size.width floatValue], [size.height floatValue]) error:error];
+    [self.camera setPreviewSize:CGSizeMake((CGFloat)size.width, (CGFloat)size.height) error:error];
   }
 }
 
@@ -638,7 +638,7 @@ FlutterEventSink audioLevelEventSink;
   }
   
   // height & width are inverted, this is intentionnal, because camera is always on portrait mode
-  return [PreviewSize makeWithWidth:@(previewSize.height) height:@(previewSize.width)];
+  return [PreviewSize makeWithWidth:(double)previewSize.height height:(double)previewSize.width];
 }
 
 #pragma mark - Zoom methods

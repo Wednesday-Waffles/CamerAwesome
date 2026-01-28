@@ -136,9 +136,9 @@
 /// Assign the default preview qualities
 - (void)setBestPreviewQuality {
   NSArray *qualities = [CameraQualities captureFormatsForDevice:_captureDevice];
-  PreviewSize *firstPreviewSize = [qualities count] > 0 ? qualities.lastObject : [PreviewSize makeWithWidth:@3840 height:@2160];
-  
-  CGSize firstSize = CGSizeMake([firstPreviewSize.width floatValue], [firstPreviewSize.height floatValue]);
+  PreviewSize *firstPreviewSize = [qualities count] > 0 ? qualities.lastObject : [PreviewSize makeWithWidth:3840.0 height:2160.0];
+
+  CGSize firstSize = CGSizeMake((CGFloat)firstPreviewSize.width, (CGFloat)firstPreviewSize.height);
   [self setCameraPreset:firstSize];
 }
 
