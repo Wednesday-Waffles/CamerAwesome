@@ -1558,4 +1558,27 @@ void SetUpCameraInterfaceWithSuffix(id<FlutterBinaryMessenger> binaryMessenger, 
       [channel setMessageHandler:nil];
     }
   }
+  /// Returns true if audio is currently set up and ready for recording.
+  /// This is the actual native state - use for debugging/verification.
+  ///
+  /// When testing audio failure reproduction:
+  /// - If this returns false AFTER camera init, the reproduction is working
+  /// - If this returns true, the debug injection didn't work as expected
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
+        initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.camerawesome.CameraInterface.isAudioSetup", messageChannelSuffix]
+        binaryMessenger:binaryMessenger
+        codec:nullGetPigeonCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(isAudioSetupWithError:)], @"CameraInterface api (%@) doesn't respond to @selector(isAudioSetupWithError:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        FlutterError *error;
+        NSNumber *output = [api isAudioSetupWithError:&error];
+        callback(wrapResult(output, error));
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
 }

@@ -775,6 +775,19 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
         // since CameraX handles audio setup atomically with video recording.
     }
 
+    /**
+     * Returns true if audio is ready for recording.
+     * On Android with CameraX, audio is set up atomically with video recording,
+     * so this checks if we have RECORD_AUDIO permission.
+     */
+    override fun isAudioSetup(): Boolean {
+        val hasPermission = activity?.let {
+            ContextCompat.checkSelfPermission(it, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        } ?: false
+        Log.d(TAG, "isAudioSetup: $hasPermission (permission-based on Android)")
+        return hasPermission
+    }
+
     @SuppressLint("RestrictedApi", "UnsafeOptInUsageError")
     override fun availableSizes(): List<PreviewSize> {
         return cameraState.previewSizes().map {

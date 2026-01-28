@@ -130,6 +130,10 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 /// @param mode Debug mode (0=none, 1=preWarmFailsRetrySucceeds, 2=preWarmFailsRetryFails, 3=preWarmDelayed, 4=permissionDenied)
 /// @param delayMs Delay in milliseconds for mode 3 (preWarmDelayed)
 - (void)setNativeAudioDebugMode:(NSInteger)mode delayMs:(NSInteger)delayMs;
+
+/// Returns YES if audio is currently set up and ready for recording.
+/// This reflects the actual native state - useful for debugging and verification.
+- (BOOL)isAudioSetup;
 @end
 
 NS_ASSUME_NONNULL_END

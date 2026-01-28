@@ -686,6 +686,13 @@
   _nativeAudioSetupAttemptCount = 0;
 }
 
+/// Returns YES if audio is currently set up and ready for recording.
+- (BOOL)isAudioSetup {
+  BOOL isSetup = _videoController.isAudioSetup;
+  NSLog(@"[CamerAwesome] isAudioSetup check: %@", isSetup ? @"YES" : @"NO");
+  return isSetup;
+}
+
 # pragma mark - Audio
 /// Setup audio channel to record audio
 - (void)setUpCaptureSessionForAudioError:(nonnull void (^)(NSError *))error {

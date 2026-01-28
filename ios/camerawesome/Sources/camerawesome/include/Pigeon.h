@@ -394,6 +394,15 @@ extern void SetUpAnalysisImageUtilsWithSuffix(id<FlutterBinaryMessenger> binaryM
 ///
 /// [delayMs]: Delay in milliseconds for mode 3 (preWarmDelayed).
 - (void)setNativeAudioDebugModeMode:(NSInteger)mode delayMs:(NSInteger)delayMs error:(FlutterError *_Nullable *_Nonnull)error;
+/// Returns true if audio is currently set up and ready for recording.
+/// This is the actual native state - use for debugging/verification.
+///
+/// When testing audio failure reproduction:
+/// - If this returns false AFTER camera init, the reproduction is working
+/// - If this returns true, the debug injection didn't work as expected
+///
+/// @return `nil` only when `error != nil`.
+- (nullable NSNumber *)isAudioSetupWithError:(FlutterError *_Nullable *_Nonnull)error;
 @end
 
 extern void SetUpCameraInterface(id<FlutterBinaryMessenger> binaryMessenger, NSObject<CameraInterface> *_Nullable api);

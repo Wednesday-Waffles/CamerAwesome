@@ -422,6 +422,19 @@ class CamerawesomePlugin {
     return CameraInterface().setNativeAudioDebugMode(mode, delayMs);
   }
 
+  /// Returns true if audio is currently set up and ready for recording.
+  ///
+  /// This queries the actual native state - useful for debugging and verification.
+  /// When reproducing the audio failure bug:
+  /// - If this returns false AFTER camera init, the reproduction is working
+  /// - If this returns true, the debug injection didn't work as expected
+  ///
+  /// On iOS: Returns the actual isAudioSetup flag from the video controller.
+  /// On Android: Returns whether RECORD_AUDIO permission is granted.
+  static Future<bool> isAudioSetup() {
+    return CameraInterface().isAudioSetup();
+  }
+
   /// set exif preferences when a photo is saved
   ///
   /// The GPS value can be null on Android if:

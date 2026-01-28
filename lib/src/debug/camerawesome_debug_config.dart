@@ -1,3 +1,5 @@
+import 'package:camerawesome/pigeon.dart';
+
 /// Audio setup failure injection modes for testing.
 enum AudioSetupFailureMode {
   /// No failure injection - normal behavior.
@@ -264,6 +266,35 @@ class CamerawesomeDebugConfig {
     audioSetupFailureMode = AudioSetupFailureMode.preWarmFailsRetryFails;
     skipEnsureAudioReady = false;
     _audioSetupAttemptCount = 0;
+  }
+
+  /// Verifies that the audio failure state was properly reproduced.
+  ///
+  /// Call this AFTER camera initialization to confirm the debug injection worked.
+  /// Returns a description of the verification result.
+  ///
+  /// Example usage:
+  /// ```dart
+  /// CamerawesomeDebugConfig.instance.enableProductionBugReproduction();
+  /// // Navigate to camera (camera inits)
+  /// // After camera is ready:
+  /// final result = await CamerawesomeDebugConfig.instance.verifyAudioFailureState();
+  /// print(result); // "✓ Audio is NOT set up (as expected for bug reproduction)"
+  /// ```
+  Future<String> verifyAudioFailureState() async {
+    final isSetup = await CameraInterface().isAudioSetup();
+
+    if (audioSetupFailureMode == AudioSetupFailureMode.none) {
+      return '⚠️ No audio failure mode active. Call enableProductionBugReproduction() first.';
+    }
+
+    if (isSetup) {
+      return '❌ Audio IS set up - debug injection may not have worked. '
+          'Try hot restarting the app after setting the debug mode.';
+    } else {
+      return '✓ Audio is NOT set up (as expected for bug reproduction). '
+          'If skipEnsureAudioReady=true, video will record without audio.';
+    }
   }
 
   /// Convert [AudioSetupFailureMode] to native debug mode integer.

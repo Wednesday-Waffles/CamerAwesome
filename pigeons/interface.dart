@@ -455,4 +455,12 @@ abstract class CameraInterface {
   ///
   /// [delayMs]: Delay in milliseconds for mode 3 (preWarmDelayed).
   void setNativeAudioDebugMode(int mode, int delayMs);
+
+  /// Returns true if audio is currently set up and ready for recording.
+  /// This is the actual native state - use for debugging/verification.
+  ///
+  /// When testing audio failure reproduction:
+  /// - If this returns false AFTER camera init, the reproduction is working
+  /// - If this returns true, the debug injection didn't work as expected
+  bool isAudioSetup();
 }

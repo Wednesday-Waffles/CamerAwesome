@@ -861,6 +861,15 @@ interface CameraInterface {
    * [delayMs]: Delay in milliseconds for mode 3 (preWarmDelayed).
    */
   fun setNativeAudioDebugMode(mode: Long, delayMs: Long)
+  /**
+   * Returns true if audio is currently set up and ready for recording.
+   * This is the actual native state - use for debugging/verification.
+   *
+   * When testing audio failure reproduction:
+   * - If this returns false AFTER camera init, the reproduction is working
+   * - If this returns true, the debug injection didn't work as expected
+   */
+  fun isAudioSetup(): Boolean
 
   companion object {
     /** The codec used by CameraInterface. */
@@ -1572,6 +1581,21 @@ interface CameraInterface {
             val wrapped: List<Any?> = try {
               api.setNativeAudioDebugMode(modeArg, delayMsArg)
               listOf(null)
+            } catch (exception: Throwable) {
+              wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.camerawesome.CameraInterface.isAudioSetup$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.isAudioSetup())
             } catch (exception: Throwable) {
               wrapError(exception)
             }

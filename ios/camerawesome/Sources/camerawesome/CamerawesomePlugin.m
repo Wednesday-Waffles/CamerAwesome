@@ -789,6 +789,15 @@ FlutterEventSink audioLevelEventSink;
   [self.camera setNativeAudioDebugMode:mode delayMs:delayMs];
 }
 
+- (nullable NSNumber *)isAudioSetupWithError:(FlutterError *_Nullable *_Nonnull)error {
+  if (self.camera == nil) {
+    // Camera not initialized, audio is not set up
+    return @(NO);
+  }
+
+  return @([self.camera isAudioSetup]);
+}
+
 - (void)bgra8888toJpegBgra8888image:(nonnull AnalysisImageWrapper *)bgra8888image jpegQuality:(nonnull NSNumber *)jpegQuality completion:(nonnull void (^)(AnalysisImageWrapper * _Nullable, FlutterError * _Nullable))completion {
   dispatch_async(_dispatchQueueAnalysis, ^{
     [AnalysisController bgra8888toJpegBgra8888image:bgra8888image jpegQuality:jpegQuality completion:completion];
